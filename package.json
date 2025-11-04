@@ -1,0 +1,30 @@
+{
+  "name": "universal-3d-builder",
+  "version": "1.0.0",
+  "description": "AI-powered 3D design platform for creating and exporting 3D models",
+  "main": "index.html",
+  "scripts": {
+    "start": "echo 'Open index.html in your browser to run the app'"
+  },
+  "keywords": [
+    "3d",
+    "design",
+    "ai",
+    "three.js",
+    "react",
+    "3d-printing",
+    "stl",
+    "cad",
+    "modeling"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/universal-3d-builder.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/universal-3d-builder/issues"
+  },
+  "homepage": "https://github.com/yourusername/universal-3d-builder#readme"
+}
