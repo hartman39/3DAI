@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal 3D Builder - AI Edition</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white overflow-hidden">
+    <div class="flex h-screen">
+        <!-- Left Sidebar -->
+        <div class="w-80 bg-gray-800 flex flex-col border-r border-gray-700">
+            <div class="p-4 border-b border-gray-700">
+                <h1 class="text-2xl font-bold text-blue-400 mb-2">🎨 Universal 3D Builder</h1>
+                <p class="text-xs text-gray-400">Talk to AI or design manually!</p>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-4">
+                <!-- AI Chat Section -->
+                <div class="mb-4">
+                    <h2 class="text-sm font-semibold mb-2 text-blue-400">🤖 AI Chat</h2>
+                    <div class="bg-gray-700 rounded-lg p-3 mb-3 text-xs">
+                        <strong>💡 Try saying:</strong><br>
+                        • "Create a red car"<br>
+                        • "Build a house with a roof"<br>
+                        • "Make a robot"<br>
+                        • "Add a blue sphere"
+                    </div>
+                    <div id="chatMessages" class="bg-gray-900 rounded-lg p-3 h-64 overflow-y-auto mb-3"></div>
+                    <div class="flex gap-2">
+                        <input 
+                            type="text" 
+                            id="chatInput" 
+                            placeholder="Describe what to create..."
+                            class="flex-1 p-2 bg-gray-700 rounded text-sm border border-gray-600"
+                            onkeypress="if(event.key==='Enter') sendMessage()"
+                        >
+                        <button onclick="sendMessage()" id="sendBtn" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-sm">
+                            Send
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Manual Controls -->
+                <div class="mb-4">
+                    <h2 class="text-sm font-semibold mb-2 text-blue-400">➕ Manual Add</h2>
+                    <select id="shapeType" class="w-full p-2 bg-gray-700 rounded text-sm mb-2">
+                        <option value="cube">Cube</option>
+                        <option value="sphere">Sphere</option>
+                        <option value="cylinder">Cylinder</option>
+                        <option value="cone">Cone</option>
+                        <option value="torus">Torus</option>
+                        <option value="pyramid">Pyramid</option>
+                        <option value="octahedron">Octahedron</option>
+                        <option value="dodecahedron">Dodecahedron</option>
+                        <option value="icosahedron">Icosahedron</option>
+                    </select>
+                    <button onclick="addShape()" class="w-full bg-blue-600 hover:bg-blue-700 p-2 rounded text-sm">
+                        Add Shape
+                    </button>
+                </div>
+
+                <!-- Objects List -->
+                <div class="mb-4">
+                    <h2 class="text-sm font-semibold mb-2 text-blue-400">📦 Objects (<span id="objectCount">0</span>)</h2>
+                    <div id="objectsList" class="space-y-1 max-h-48 overflow-y-auto mb-2"></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="undo()" class="bg-gray-700 hover:bg-gray-600 p-2 rounded text-xs">
+                            ↶ Undo
+                        </button>
+                        <button onclick="redo()" class="bg-gray-700 hover:bg-gray-600 p-2 rounded text-xs">
+                            ↷ Redo
+                        </button>
+                    </div>
+                    <button onclick="clearAll()" class="w-full bg-red-600 hover:bg-red-700 p-2 rounded text-sm mt-2">
+                        Clear All
+                    </button>
+                </div>
+
+                <!-- Export -->
+                <div>
+                    <h2 class="text-sm font-semibold mb-2 text-blue-400">📤 Export</h2>
+                    <button onclick="exportSTL()" class="w-full bg-green-600 hover:bg-green-700 p-2 rounded text-sm mb-2">
+                        Download STL
+                    </button>
+                    <button onclick="generateShareLink()" class="w-full bg-purple-600 hover:bg-purple-700 p-2 rounded text-sm">
+                        Generate Share Link
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center - 3D Viewport -->
+        <div class="flex-1 flex flex-col">
+            <!-- Top Toolbar -->
+            <div class="bg-gray-800 p-2 border-b border-gray-700 flex gap-2 items-center">
+                <span class="text-xs text-gray-400">View:</span>
+                <button onclick="setView('perspective')" class="px-3 py-1 rounded text-xs bg-blue-600">perspective</button>
+                <button onclick="setView('front')" class="px-3 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600">front</button>
+                <button onclick="setView('back')" class="px-3 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600">back</button>
+                <button onclick="setView('left')" class="px-3 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600">left</button>
+                <button onclick="setView('right')" class="px-3 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600">right</button>
+                <button onclick="setView('top')" class="px-3 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600">top</button>
+                <button onclick="toggleGrid()" class="px-3 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 ml-auto">
+                    Grid: <span id="gridStatus">On</span>
+                </button>
+            </div>
+
+            <!-- 3D Canvas -->
+            <div class="flex-1 relative">
+                <div id="canvas-container" class="w-full h-full"></div>
+                <div class="absolute top-4 right-4 bg-black bg-opacity-70 px-4 py-2 rounded text-sm" id="toast" style="display: none;"></div>
+                <div class="absolute bottom-4 left-4 bg-black bg-opacity-70 p-2 rounded text-xs">
+                    <div><strong>Controls:</strong></div>
+                    <div>Drag: Rotate | Scroll: Zoom</div>
+                    <div>Objects: <span id="objCount">0</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar - Properties -->
+        <div class="w-72 bg-gray-800 overflow-y-auto border-l border-gray-700 p-4" id="propertiesPanel" style="display: none;">
+            <h2 class="text-lg font-semibold mb-4">Properties</h2>
+            
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs text-gray-400">Name</label>
+                    <input type="text" id="objName" onchange="updateSelected()" class="w-full p-1 bg-gray-700 rounded text-xs mt-1">
+                </div>
+
+                <div>
+                    <label class="text-xs text-gray-400">Position</label>
+                    <div class="grid grid-cols-3 gap-1 mt-1">
+                        <input type="number" id="posX" step="0.5" onchange="updateSelected()" class="p-1 bg-gray-700 rounded text-xs" placeholder="X">
+                        <input type="number" id="posY" step="0.5" onchange="updateSelected()" class="p-1 bg-gray-700 rounded text-xs" placeholder="Y">
+                        <input type="number" id="posZ" step="0.5" onchange="updateSelected()" class="p-1 bg-gray-700 rounded text-xs" placeholder="Z">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-xs text-gray-400">Scale</label>
+                    <div class="grid grid-cols-3 gap-1 mt-1">
+                        <input type="number" id="scaleX" step="0.1" min="0.1" onchange="updateSelected()" class="p-1 bg-gray-700 rounded text-xs" placeholder="X">
+                        <input type="number" id="scaleY" step="0.1" min="0.1" onchange="updateSelected()" class="p-1 bg-gray-700 rounded text-xs" placeholder="Y">
+                        <input type="number" id="scaleZ" step="0.1" min="0.1" onchange="updateSelected()" class="p-1 bg-gray-700 rounded text-xs" placeholder="Z">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-xs text-gray-400">Color</label>
+                    <input type="color" id="objColor" onchange="updateSelected()" class="w-full h-10 rounded mt-1">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer;
+        let objects = [];
+        let selectedObject = null;
+        let history = [];
+        let historyIndex = -1;
+        let isThinking = false;
+        let showGrid = true;
+        let gridHelper, axesHelper;
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a2e);
+
+            const container = document.getElementById('canvas-container');
+            camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 2000);
+            camera.position.set(50, 50, 50);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            container.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 10, 10);
+            scene.add(directionalLight);
+            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+            directionalLight2.position.set(-10, -10, -10);
+            scene.add(directionalLight2);
+
+            gridHelper = new THREE.GridHelper(250, 250, 0x444444, 0x222222);
+            scene.add(gridHelper);
+
+            axesHelper = new THREE.AxesHelper(40);
+            scene.add(axesHelper);
+
+            let isDragging = false, lastX = 0, lastY = 0;
+
+            renderer.domElement.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                lastX = e.clientX;
+                lastY = e.clientY;
+            });
+
+            renderer.domElement.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                const deltaX = e.clientX - lastX;
+                const deltaY = e.clientY - lastY;
+                const speed = 0.005;
+                const radius = Math.sqrt(camera.position.x ** 2 + camera.position.z ** 2);
+                const angle = Math.atan2(camera.position.z, camera.position.x);
+                const newAngle = angle - deltaX * speed;
+                camera.position.x = radius * Math.cos(newAngle);
+                camera.position.z = radius * Math.sin(newAngle);
+                camera.position.y += deltaY * speed * 5;
+                camera.lookAt(0, 0, 0);
+                lastX = e.clientX;
+                lastY = e.clientY;
+            });
+
+            renderer.domElement.addEventListener('mouseup', () => { isDragging = false; });
+
+            renderer.domElement.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                camera.position.multiplyScalar(1 + (e.deltaY > 0 ? 0.1 : -0.1));
+            });
+
+            window.addEventListener('resize', () => {
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            });
+
+            animate();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+
+        function createGeometry(type) {
+            switch(type) {
+                case 'cube': return new THREE.BoxGeometry(1, 1, 1);
+                case 'sphere': return new THREE.SphereGeometry(0.5, 32, 32);
+                case 'cylinder': return new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
+                case 'cone': return new THREE.ConeGeometry(0.5, 1, 32);
+                case 'torus': return new THREE.TorusGeometry(0.5, 0.2, 16, 100);
+                case 'pyramid': return new THREE.ConeGeometry(0.5, 1, 4);
+                case 'octahedron': return new THREE.OctahedronGeometry(0.5);
+                case 'dodecahedron': return new THREE.DodecahedronGeometry(0.5);
+                case 'icosahedron': return new THREE.IcosahedronGeometry(0.5);
+                default: return new THREE.BoxGeometry(1, 1, 1);
+            }
+        }
+
+        function addShape() {
+            const type = document.getElementById('shapeType').value;
+            const geometry = createGeometry(type);
+            const material = new THREE.MeshPhongMaterial({ 
+                color: Math.random() * 0xffffff,
+                shininess: 50
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(
+                (Math.random() - 0.5) * 10,
+                Math.random() * 3 + 1,
+                (Math.random() - 0.5) * 10
+            );
+
+            const obj = {
+                id: Date.now(),
+                name: `${type}-${objects.length + 1}`,
+                type: type,
+                mesh: mesh,
+                properties: {
+                    position: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
+                    scale: { x: 1, y: 1, z: 1 },
+                    rotation: { x: 0, y: 0, z: 0 },
+                    color: '#' + mesh.material.color.getHexString()
+                }
+            };
+
+            objects.push(obj);
+            scene.add(mesh);
+            addToHistory();
+            updateObjectsList();
+            showToast(`${type} added!`);
+        }
+
+        function updateObjectsList() {
+            const list = document.getElementById('objectsList');
+            list.innerHTML = '';
+            objects.forEach(obj => {
+                const div = document.createElement('div');
+                div.className = selectedObject && selectedObject.id === obj.id ? 
+                    'p-2 rounded cursor-pointer bg-blue-700' : 'p-2 rounded cursor-pointer bg-gray-700 hover:bg-gray-600';
+                div.onclick = () => selectObject(obj);
+                div.innerHTML = `
+                    <div class="flex justify-between items-center text-sm">
+                        <span>${obj.name}</span>
+                        <div>
+                            <button onclick="event.stopPropagation(); duplicateObject(${obj.id})" class="text-blue-400 hover:text-blue-300 text-xs mr-1">Copy</button>
+                            <button onclick="event.stopPropagation(); deleteObject(${obj.id})" class="text-red-400 hover:text-red-300 text-xs">Del</button>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+            document.getElementById('objectCount').textContent = objects.length;
+            document.getElementById('objCount').textContent = objects.length;
+        }
+
+        function selectObject(obj) {
+            if (selectedObject && selectedObject.mesh) {
+                const oldEdges = selectedObject.mesh.children.find(child => child.type === 'LineSegments');
+                if (oldEdges) selectedObject.mesh.remove(oldEdges);
+            }
+
+            selectedObject = obj;
+
+            if (obj && obj.mesh) {
+                const edges = new THREE.EdgesGeometry(obj.mesh.geometry);
+                const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 2 }));
+                obj.mesh.add(line);
+
+                document.getElementById('objName').value = obj.name;
+                document.getElementById('posX').value = obj.properties.position.x.toFixed(2);
+                document.getElementById('posY').value = obj.properties.position.y.toFixed(2);
+                document.getElementById('posZ').value = obj.properties.position.z.toFixed(2);
+                document.getElementById('scaleX').value = obj.properties.scale.x.toFixed(2);
+                document.getElementById('scaleY').value = obj.properties.scale.y.toFixed(2);
+                document.getElementById('scaleZ').value = obj.properties.scale.z.toFixed(2);
+                document.getElementById('objColor').value = obj.properties.color;
+
+                document.getElementById('propertiesPanel').style.display = 'block';
+            }
+
+            updateObjectsList();
+        }
+
+        function updateSelected() {
+            if (!selectedObject) return;
+
+            selectedObject.name = document.getElementById('objName').value;
+            const posX = parseFloat(document.getElementById('posX').value);
+            const posY = parseFloat(document.getElementById('posY').value);
+            const posZ = parseFloat(document.getElementById('posZ').value);
+            const scaleX = parseFloat(document.getElementById('scaleX').value);
+            const scaleY = parseFloat(document.getElementById('scaleY').value);
+            const scaleZ = parseFloat(document.getElementById('scaleZ').value);
+            const color = document.getElementById('objColor').value;
+
+            selectedObject.properties.position = { x: posX, y: posY, z: posZ };
+            selectedObject.properties.scale = { x: scaleX, y: scaleY, z: scaleZ };
+            selectedObject.properties.color = color;
+
+            selectedObject.mesh.position.set(posX, posY, posZ);
+            selectedObject.mesh.scale.set(scaleX, scaleY, scaleZ);
+            selectedObject.mesh.material.color.set(color);
+
+            updateObjectsList();
+        }
+
+        function duplicateObject(id) {
+            const obj = objects.find(o => o.id === id);
+            if (!obj) return;
+
+            const geometry = createGeometry(obj.type);
+            const material = new THREE.MeshPhongMaterial({ 
+                color: obj.properties.color,
+                shininess: 50
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(
+                obj.properties.position.x + 1,
+                obj.properties.position.y,
+                obj.properties.position.z + 1
+            );
+            mesh.scale.set(obj.properties.scale.x, obj.properties.scale.y, obj.properties.scale.z);
+
+            const newObj = {
+                id: Date.now(),
+                name: `${obj.name}-copy`,
+                type: obj.type,
+                mesh: mesh,
+                properties: {
+                    position: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
+                    scale: { ...obj.properties.scale },
+                    rotation: { ...obj.properties.rotation },
+                    color: obj.properties.color
+                }
+            };
+
+            objects.push(newObj);
+            scene.add(mesh);
+            addToHistory();
+            updateObjectsList();
+            showToast('Duplicated!');
+        }
+
+        function deleteObject(id) {
+            const obj = objects.find(o => o.id === id);
+            if (!obj) return;
+
+            scene.remove(obj.mesh);
+            objects = objects.filter(o => o.id !== id);
+            
+            if (selectedObject && selectedObject.id === id) {
+                selectedObject = null;
+                document.getElementById('propertiesPanel').style.display = 'none';
+            }
+
+            addToHistory();
+            updateObjectsList();
+            showToast('Deleted!');
+        }
+
+        function clearAll() {
+            if (objects.length === 0 || !confirm('Clear all objects?')) return;
+            objects.forEach(obj => scene.remove(obj.mesh));
+            objects = [];
+            selectedObject = null;
+            document.getElementById('propertiesPanel').style.display = 'none';
+            addToHistory();
+            updateObjectsList();
+            showToast('Cleared!');
+        }
+
+        function addToHistory() {
+            const newHistory = history.slice(0, historyIndex + 1);
+            newHistory.push(JSON.parse(JSON.stringify(objects.map(o => ({
+                id: o.id,
+                name: o.name,
+                type: o.type,
+                properties: o.properties
+            })))));
+            history = newHistory;
+            historyIndex = history.length - 1;
+        }
+
+        function undo() {
+            if (historyIndex > 0) {
+                historyIndex--;
+                restoreHistory();
+                showToast('Undo');
+            }
+        }
+
+        function redo() {
+            if (historyIndex < history.length - 1) {
+                historyIndex++;
+                restoreHistory();
+                showToast('Redo');
+            }
+        }
+
+        function restoreHistory() {
+            objects.forEach(obj => scene.remove(obj.mesh));
+            objects = [];
+
+            const savedObjects = history[historyIndex];
+            savedObjects.forEach(objData => {
+                const geometry = createGeometry(objData.type);
+                const material = new THREE.MeshPhongMaterial({ 
+                    color: objData.properties.color,
+                    shininess: 50
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(objData.properties.position.x, objData.properties.position.y, objData.properties.position.z);
+                mesh.scale.set(objData.properties.scale.x, objData.properties.scale.y, objData.properties.scale.z);
+
+                const obj = {
+                    id: objData.id,
+                    name: objData.name,
+                    type: objData.type,
+                    mesh: mesh,
+                    properties: objData.properties
+                };
+
+                objects.push(obj);
+                scene.add(mesh);
+            });
+
+            updateObjectsList();
+        }
+
+        function exportSTL() {
+            if (objects.length === 0) {
+                showToast('No objects to export!');
+                return;
+            }
+
+            let stlString = 'solid design\n';
+            objects.forEach(obj => {
+                const geometry = obj.mesh.geometry;
+                const position = geometry.attributes.position;
+                const matrix = new THREE.Matrix4();
+                matrix.makeRotationFromEuler(new THREE.Euler(obj.properties.rotation.x, obj.properties.rotation.y, obj.properties.rotation.z));
+                matrix.setPosition(obj.properties.position.x, obj.properties.position.y, obj.properties.position.z);
+                const scale = new THREE.Matrix4().makeScale(obj.properties.scale.x, obj.properties.scale.y, obj.properties.scale.z);
+                matrix.multiply(scale);
+
+                if (geometry.index) {
+                    for (let i = 0; i < geometry.index.count; i += 3) {
+                        const vertices = [];
+                        for (let j = 0; j < 3; j++) {
+                            const idx = geometry.index.array[i + j];
+                            const v = new THREE.Vector3(
+                                position.array[idx * 3],
+                                position.array[idx * 3 + 1],
+                                position.array[idx * 3 + 2]
+                            ).applyMatrix4(matrix);
+                            vertices.push(v);
+                        }
+                        const normal = new THREE.Vector3()
+                            .crossVectors(
+                                new THREE.Vector3().subVectors(vertices[1], vertices[0]),
+                                new THREE.Vector3().subVectors(vertices[2], vertices[0])
+                            )
+                            .normalize();
+                        stlString += `  facet normal ${normal.x} ${normal.y} ${normal.z}\n`;
+                        stlString += `    outer loop\n`;
+                        vertices.forEach(v => {
+                            stlString += `      vertex ${v.x} ${v.y} ${v.z}\n`;
+                        });
+                        stlString += `    endloop\n`;
+                        stlString += `  endfacet\n`;
+                    }
+                }
+            });
+            stlString += 'endsolid design\n';
+
+            const blob = new Blob([stlString], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `design-${Date.now()}.stl`;
+            link.click();
+            URL.revokeObjectURL(url);
+            showToast('STL downloaded!');
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const userMessage = input.value.trim();
+            if (!userMessage || isThinking) return;
+
+            input.value = '';
+            addChatMessage('user', userMessage);
+            isThinking = true;
+            document.getElementById('sendBtn').disabled = true;
+            document.getElementById('sendBtn').textContent = '...';
+
+            const systemPrompt = `You are an AI that creates 3D objects. Respond ONLY with valid JSON.
+
+Current scene: ${JSON.stringify(objects.map(o => ({ name: o.name, type: o.type })))}
+
+Available shapes: cube, sphere, cylinder, cone, torus, pyramid, octahedron, dodecahedron, icosahedron
+
+CRITICAL: Response must be ONLY JSON, NO markdown, NO text before or after.
+
+Format:
+{
+  "objects": [
+    {
+      "type": "cube",
+      "name": "red-cube",
+      "position": {"x": 0, "y": 1, "z": 0},
+      "scale": {"x": 1, "y": 1, "z": 1},
+      "rotation": {"x": 0, "y": 0, "z": 0},
+      "color": "#ff0000"
+    }
+  ],
+  "message": "Created a red cube!"
+}
+
+User request: ${userMessage}`;
+
+            try {
+                const response = await fetch("https://api.anthropic.com/v1/messages", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        model: "claude-sonnet-4-20250514",
+                        max_tokens: 2000,
+                        messages: [{ role: "user", content: systemPrompt }]
+                    })
+                });
+
+                const data = await response.json();
+                let responseText = data.content[0].text;
+                responseText = responseText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+                const designData = JSON.parse(responseText);
+
+                if (designData.objects && designData.objects.length > 0) {
+                    designData.objects.forEach(objData => {
+                        const geometry = createGeometry(objData.type);
+                        const material = new THREE.MeshPhongMaterial({ 
+                            color: objData.color || '#3498db',
+                            shininess: 50
+                        });
+                        const mesh = new THREE.Mesh(geometry, material);
+                        mesh.position.set(objData.position.x, objData.position.y, objData.position.z);
+                        mesh.scale.set(objData.scale.x, objData.scale.y, objData.scale.z);
+                        mesh.rotation.set(objData.rotation.x, objData.rotation.y, objData.rotation.z);
+
+                        const obj = {
+                            id: Date.now() + Math.random(),
+                            name: objData.name,
+                            type: objData.type,
+                            mesh: mesh,
+                            properties: {
+                                position: objData.position,
+                                scale: objData.scale,
+                                rotation: objData.rotation,
+                                color: objData.color
+                            }
+                        };
+
+                        objects.push(obj);
+                        scene.add(mesh);
+                    });
+                    addToHistory();
+                    updateObjectsList();
+                }
+
+                addChatMessage('assistant', designData.message || 'Objects created!');
+            } catch (error) {
+                console.error(error);
+                addChatMessage('assistant', 'Sorry, I had trouble with that. Try simpler requests like "create a red cube"');
+            } finally {
+                isThinking = false;
+                document.getElementById('sendBtn').disabled = false;
+                document.getElementById('sendBtn').textContent = 'Send';
+            }
+        }
+
+        function addChatMessage(role, content) {
+            const container = document.getElementById('chatMessages');
+            const div = document.createElement('div');
+            div.className = `chat-message ${role}`;
+            div.style.cssText = role === 'user' ? 
+                'background: linear-gradient(45deg, #667eea, #764ba2); padding: 8px; border-radius: 8px; margin-bottom: 8px; margin-left: 20px; font-size: 13px;' :
+                'background: rgba(255,255,255,0.1); padding: 8px; border-radius: 8px; margin-bottom: 8px; margin-right: 20px; font-size: 13px;';
+            div.textContent = content;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function setView(view) {
+            const distance = 60;
+            switch(view) {
+                case 'front':
+                    camera.position.set(0, 0, distance);
+                    break;
+                case 'back':
+                    camera.position.set(0, 0, -distance);
+                    break;
+                case 'left':
+                    camera.position.set(-distance, 0, 0);
+                    break;
+                case 'right':
+                    camera.position.set(distance, 0, 0);
+                    break;
+                case 'top':
+                    camera.position.set(0, distance, 0);
+                    break;
+                case 'perspective':
+                    camera.position.set(50, 50, 50);
+                    break;
+            }
+            camera.lookAt(0, 0, 0);
+        }
+
+        function toggleGrid() {
+            showGrid = !showGrid;
+            gridHelper.visible = showGrid;
+            axesHelper.visible = showGrid;
+            document.getElementById('gridStatus').textContent = showGrid ? 'On' : 'Off';
+        }
+
+        function generateShareLink() {
+            if (objects.length === 0) {
+                showToast('No objects to share!');
+                return;
+            }
+
+            const designData = {
+                objects: objects.map(obj => ({
+                    name: obj.name,
+                    type: obj.type,
+                    properties: obj.properties
+                }))
+            };
+
+            const encoded = btoa(JSON.stringify(designData));
+            const shareUrl = `${window.location.origin}${window.location.pathname}?design=${encoded}`;
+            
+            navigator.clipboard.writeText(shareUrl).then(() => {
+                showToast('Share link copied!');
+            }).catch(() => {
+                prompt('Copy this link:', shareUrl);
+            });
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        }
+
+        // Load shared design from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const designParam = urlParams.get('design');
+        if (designParam) {
+            try {
+                const designData = JSON.parse(atob(designParam));
+                designData.objects.forEach(objData => {
+                    const geometry = createGeometry(objData.type);
+                    const material = new THREE.MeshPhongMaterial({ 
+                        color: objData.properties.color,
+                        shininess: 50
+                    });
+                    const mesh = new THREE.Mesh(geometry, material);
+                    mesh.position.set(objData.properties.position.x, objData.properties.position.y, objData.properties.position.z);
+                    mesh.scale.set(objData.properties.scale.x, objData.properties.scale.y, objData.properties.scale.z);
+
+                    const obj = {
+                        id: Date.now() + Math.random(),
+                        name: objData.name,
+                        type: objData.type,
+                        mesh: mesh,
+                        properties: objData.properties
+                    };
+
+                    objects.push(obj);
+                    scene.add(mesh);
+                });
+                updateObjectsList();
+                showToast('Shared design loaded!');
+            } catch (error) {
+                console.error('Error loading shared design:', error);
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
